@@ -1,5 +1,5 @@
-streamlit>=1.52.0
-streamlit-webrtc>=0.48.1
+streamlit
+audio-recorder-streamlit
 speechrecognition
 pydub
 imageio-ffmpeg
