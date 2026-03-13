@@ -3,8 +3,11 @@ streamlit-webrtc
 speechrecognition
 pydub
 imageio-ffmpeg
-numpy
 google-generativeai
+numpy
+openai-whisper
+setuptools
+
 
 
 
