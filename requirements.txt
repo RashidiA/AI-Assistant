@@ -2,6 +2,7 @@ streamlit
 streamlit-webrtc
 speechrecognition
 pydub
+imageio-ffmpeg
 numpy
-ffmpy
+
 
