@@ -1,5 +1,4 @@
-libgl1
-libglib2.0-dev
+libasound2-dev
 portaudio19-dev
-python3-all-dev
 ffmpeg
+libgl1
