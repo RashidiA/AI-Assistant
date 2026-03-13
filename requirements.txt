@@ -11,5 +11,4 @@ python-docx
 python-pptx
 duckduckgo-search
 SpeechRecognition
-PyAudio
 pydub
