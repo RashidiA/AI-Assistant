@@ -8,27 +8,25 @@ import io
 from gtts import gTTS
 import base64
 
-# --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Manglish AI Assistant", page_icon="🤖")
-
-# Fix for ffmpeg
+# --- 1. INITIAL CONFIG ---
+st.set_page_config(page_title="Talking Manglish AI", page_icon="🇲🇾")
 AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
 
-# Setup Gemini
+# Setup Gemini with local personality
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel(
         model_name='gemini-1.5-flash',
-        system_instruction="You are a friendly Malaysian AI. Understand and respond in Manglish (mixed English and Malay)."
+        system_instruction="You are a friendly Malaysian AI. Respond using Manglish (mixed English and Malay) naturally."
     )
 else:
-    st.error("Please add GEMINI_API_KEY to Streamlit Secrets!")
+    st.error("Add GEMINI_API_KEY to your Streamlit Secrets!")
     st.stop()
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- FUNCTION: SPEAK ---
+# --- VOICE OUTPUT ---
 def speak_text(text):
     try:
         tts = gTTS(text=text, lang='ms') 
@@ -36,22 +34,21 @@ def speak_text(text):
         tts.write_to_fp(fp)
         fp.seek(0)
         b64 = base64.b64encode(fp.read()).decode()
-        md = f'<audio autoplay="true"><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
-        st.markdown(md, unsafe_markdown=True)
+        audio_html = f'<audio autoplay="true"><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
+        st.markdown(audio_html, unsafe_markdown=True)
     except:
         pass
 
-# --- 2. USER INTERFACE ---
-st.title("🎙️ Talking Manglish AI")
+# --- 2. UI ---
+st.title("🎙️ Talking Assistant (Manglish)")
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- 3. MIC CONTROL (STUN FIX) ---
+# --- 3. MICROPHONE (Python 3.14 Fail-Safe) ---
 with st.sidebar:
     st.header("Mic Control")
-    # Using a try-block to ignore the Python 3.14 shutdown bug
     try:
         webrtc_ctx = webrtc_streamer(
             key="speech-to-text",
@@ -65,17 +62,16 @@ with st.sidebar:
                 ]
             }
         )
-    except AttributeError:
-        # This catches the '_polling_thread' error silently
+    except Exception as e:
+        st.warning("Connection sync issue. Usually fixed by a page refresh.")
         webrtc_ctx = None
-        st.warning("WebRTC initialization issue. Please refresh the page.")
 
-# --- 4. PROCESSING ---
+# --- 4. THE BRAIN ---
 if webrtc_ctx and webrtc_ctx.audio_receiver:
-    if st.button("🚀 Process Voice", use_container_width=True):
+    if st.button("🚀 Record & Speak", use_container_width=True):
         audio_frames = webrtc_ctx.audio_receiver.get_frames()
         if len(audio_frames) > 0:
-            with st.spinner("Decoding Manglish..."):
+            with st.spinner("Decoding Mixed Language..."):
                 try:
                     sound = AudioSegment.empty()
                     for frame in audio_frames:
@@ -93,6 +89,7 @@ if webrtc_ctx and webrtc_ctx.audio_receiver:
                     r = sr.Recognizer()
                     with sr.AudioFile(audio_buffer) as source:
                         audio_data = r.record(source)
+                        # Whisper 'tiny' handles mixed Malay/English beautifully
                         user_text = r.recognize_whisper(audio_data, model="tiny")
                     
                     st.session_state.messages.append({"role": "user", "content": user_text})
@@ -102,8 +99,8 @@ if webrtc_ctx and webrtc_ctx.audio_receiver:
                 except Exception as e:
                     st.error(f"Error: {e}")
         else:
-            st.warning("No audio detected. Click Start first!")
+            st.warning("No audio detected. Click 'Start' first!")
 
-# Autoplay speech
+# Autoplay speech for the latest AI message
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
     speak_text(st.session_state.messages[-1]["content"])
