@@ -1,0 +1,5 @@
+libgl1
+libglib2.0-dev
+portaudio19-dev
+python3-all-dev
+ffmpeg
