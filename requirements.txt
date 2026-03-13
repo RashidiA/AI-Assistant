@@ -7,7 +7,4 @@ google-generativeai
 numpy
 openai-whisper
 setuptools
-
-
-
-
+soundfile
