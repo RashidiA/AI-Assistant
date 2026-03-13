@@ -4,5 +4,7 @@ speechrecognition
 pydub
 imageio-ffmpeg
 numpy
+google-generativeai
+
 
 
