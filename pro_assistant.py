@@ -12,12 +12,11 @@ import base64
 st.set_page_config(page_title="Abu AI Assistant", page_icon="🤖")
 AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
 
-# Setup Gemini 2.5 Flash (Standard for 2026)
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel(
         model_name='gemini-2.5-flash',
-        system_instruction="Your name is Abu. You are a local expert in Malaysia. Answer questions directly and helpfully in Manglish."
+        system_instruction="Your name is Abu. You are a local expert in Malaysia. Answer helpfully in Manglish."
     )
 else:
     st.error("Missing API Key!")
@@ -39,25 +38,24 @@ def speak_text(text):
 
 # --- 2. UI ---
 st.title("🤖 Abu Assistant")
-st.info("Say 'Abu' clearly, then ask your question. Example: 'Abu, suggest lunch spots nearby.'")
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- 3. THE MIC (Optimized Settings) ---
+# --- 3. THE MIC (Sensitivity Fix) ---
 audio_bytes = audio_recorder(
-    text="Click, say 'Abu...', then ask",
+    text="Say 'Abu...' then ask",
     recording_color="#e84a5f",
     neutral_color="#6aa36f",
     icon_size="3x",
-    energy_threshold=0.01, # Lower threshold to catch softer voices
-    pause_threshold=3.0    # Give you 3 seconds to finish your sentence
+    energy_threshold=0.01, 
+    pause_threshold=3.0    
 )
 
 # --- 4. PROCESSING ---
 if audio_bytes:
-    with st.spinner("Abu is thinking..."):
+    with st.spinner("Abu is processing..."):
         try:
             audio_io = io.BytesIO(audio_bytes)
             sound = AudioSegment.from_file(audio_io)
@@ -68,32 +66,34 @@ if audio_bytes:
             r = sr.Recognizer()
             with sr.AudioFile(wav_buffer) as source:
                 audio_data = r.record(source)
-                # FIX: We use 'base' model for better accuracy if 'tiny' is confusing
                 user_text = r.recognize_whisper(audio_data, model="base", language="ms")
             
             st.write(f"🔍 Abu heard: *{user_text}*")
 
-            # Check if Abu was called
-            if "abu" in user_text.lower() or "abo" in user_text.lower():
-                # Get the actual question
+            # Check for Wake Word
+            if any(w in user_text.lower() for w in ["abu", "abo", "arbu"]):
                 prompt = user_text.lower().replace("abu", "").replace("abo", "").strip()
                 
-                # If there's a question, send to Gemini
                 if len(prompt) > 2:
-                    response = model.generate_content(prompt)
-                    ai_response = response.text
-                    
-                    st.session_state.messages.append({"role": "user", "content": user_text})
-                    st.session_state.messages.append({"role": "assistant", "content": ai_response})
-                    st.rerun()
+                    try:
+                        response = model.generate_content(prompt)
+                        ai_response = response.text
+                        st.session_state.messages.append({"role": "user", "content": user_text})
+                        st.session_state.messages.append({"role": "assistant", "content": ai_response})
+                        st.rerun()
+                    # FIX: Handle the 'Quota Exceeded' 429 Error Gracefully
+                    except Exception as api_err:
+                        if "429" in str(api_err):
+                            st.warning("⚠️ Abu is a bit busy (Quota hit). Please wait 30 seconds and try again!")
+                        else:
+                            st.error(f"Brain Error: {api_err}")
                 else:
-                    st.warning("I heard my name, but what is your question, boss?")
+                    st.warning("Ya, saya Abu. Nak tanya apa?")
             else:
-                st.toast("Please start with 'Abu' so I know you are talking to me!")
+                st.toast("Start with 'Abu' lah!")
 
         except Exception as e:
-            st.error(f"Ayo, something went wrong: {e}")
+            st.error(f"Mic Error: {e}")
 
-# Autoplay
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
     speak_text(st.session_state.messages[-1]["content"])
