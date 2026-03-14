@@ -9,14 +9,15 @@ from gtts import gTTS
 import base64
 
 # --- 1. SETUP ---
-st.set_page_config(page_title="Abu AI Assistant", page_icon="🤖")
+st.set_page_config(page_title="Abu Assistant", page_icon="🤖")
 AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
 
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel(
         model_name='gemini-2.5-flash',
-        system_instruction="Your name is Abu. You are a local expert in Malaysia. Answer helpfully in Manglish."
+        # STRICTOR INSTRUCTIONS FOR LESS TALKING
+        system_instruction="Your name is Abu. Be extremely brief. Answer in Manglish using 15 words or less. No small talk."
     )
 else:
     st.error("Missing API Key!")
@@ -37,63 +38,56 @@ def speak_text(text):
         pass
 
 # --- 2. UI ---
-st.title("🤖 Abu Assistant")
+st.title("🤖 Abu (Short & Sweet)")
 
-for message in st.session_state.messages:
+# Only show the last 3 messages to keep it clean
+for message in st.session_state.messages[-3:]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- 3. THE MIC (Sensitivity Fix) ---
+# --- 3. THE MIC (TIGHTENED SENSITIVITY) ---
 audio_bytes = audio_recorder(
-    text="Say 'Abu...' then ask",
+    text="Click to speak to Abu",
     recording_color="#e84a5f",
     neutral_color="#6aa36f",
-    icon_size="3x",
-    energy_threshold=0.01, 
-    pause_threshold=3.0    
+    icon_size="2x",
+    energy_threshold=0.05, # HIGHER = Ignores more background noise
+    pause_threshold=1.5    # Stops faster when you finish speaking
 )
 
 # --- 4. PROCESSING ---
 if audio_bytes:
-    with st.spinner("Abu is processing..."):
-        try:
-            audio_io = io.BytesIO(audio_bytes)
-            sound = AudioSegment.from_file(audio_io)
-            wav_buffer = io.BytesIO()
-            sound.export(wav_buffer, format="wav")
-            wav_buffer.seek(0)
+    try:
+        audio_io = io.BytesIO(audio_bytes)
+        sound = AudioSegment.from_file(audio_io)
+        wav_buffer = io.BytesIO()
+        sound.export(wav_buffer, format="wav")
+        wav_buffer.seek(0)
+        
+        r = sr.Recognizer()
+        with sr.AudioFile(wav_buffer) as source:
+            audio_data = r.record(source)
+            user_text = r.recognize_whisper(audio_data, model="base", language="ms")
+        
+        # Check for Abu/Abo/Arbu
+        if any(w in user_text.lower() for w in ["abu", "abo", "arbu"]):
+            prompt = user_text.lower().replace("abu", "").replace("abo", "").strip()
             
-            r = sr.Recognizer()
-            with sr.AudioFile(wav_buffer) as source:
-                audio_data = r.record(source)
-                user_text = r.recognize_whisper(audio_data, model="base", language="ms")
-            
-            st.write(f"🔍 Abu heard: *{user_text}*")
-
-            # Check for Wake Word
-            if any(w in user_text.lower() for w in ["abu", "abo", "arbu"]):
-                prompt = user_text.lower().replace("abu", "").replace("abo", "").strip()
-                
-                if len(prompt) > 2:
-                    try:
-                        response = model.generate_content(prompt)
-                        ai_response = response.text
-                        st.session_state.messages.append({"role": "user", "content": user_text})
-                        st.session_state.messages.append({"role": "assistant", "content": ai_response})
-                        st.rerun()
-                    # FIX: Handle the 'Quota Exceeded' 429 Error Gracefully
-                    except Exception as api_err:
-                        if "429" in str(api_err):
-                            st.warning("⚠️ Abu is a bit busy (Quota hit). Please wait 30 seconds and try again!")
-                        else:
-                            st.error(f"Brain Error: {api_err}")
-                else:
-                    st.warning("Ya, saya Abu. Nak tanya apa?")
+            if len(prompt) > 2:
+                try:
+                    response = model.generate_content(prompt)
+                    ai_response = response.text
+                    st.session_state.messages.append({"role": "user", "content": user_text})
+                    st.session_state.messages.append({"role": "assistant", "content": ai_response})
+                    st.rerun()
+                except Exception as api_err:
+                    if "429" in str(api_err):
+                        st.toast("Wait 30s ah, Abu tired.")
             else:
-                st.toast("Start with 'Abu' lah!")
+                st.toast("Ya, Abu here. What you want?")
+    except Exception as e:
+        pass # Silently ignore errors to stop "too much talking" from the app
 
-        except Exception as e:
-            st.error(f"Mic Error: {e}")
-
+# Autoplay
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
     speak_text(st.session_state.messages[-1]["content"])
