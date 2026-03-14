@@ -1,11 +1,8 @@
-streamlit
+streamlit>=1.52.0
 audio-recorder-streamlit
-speechrecognition
-pydub
-imageio-ffmpeg
 google-generativeai
-numpy
-openai-whisper
-setuptools
-soundfile
+pydub
 gTTS
+openai-whisper
+imageio-ffmpeg
+
