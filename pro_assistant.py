@@ -41,7 +41,7 @@ def speak_text(text):
         pass
 
 # --- 2. UI ---
-st.title("🎙️ Talking Manglish AI")
+st.title("🎙️ AI Chat Assistant")
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -77,3 +77,4 @@ if audio_bytes:
 
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
     speak_text(st.session_state.messages[-1]["content"])
+
