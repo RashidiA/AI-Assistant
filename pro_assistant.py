@@ -12,13 +12,12 @@ import base64
 st.set_page_config(page_title="Abu AI Assistant", page_icon="🤖")
 AudioSegment.converter = imageio_ffmpeg.get_ffmpeg_exe()
 
+# Setup Gemini 2.5 Flash (Standard for 2026)
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel(
         model_name='gemini-2.5-flash',
-        system_instruction="""Your name is Abu. You are a local Malaysian expert. 
-        You understand that voice transcriptions might be slightly wrong (e.g., 'Toulon Shari' means 'Tolong cari'). 
-        Always respond in natural Manglish. If you are really stuck, ask: 'Sorry boss, tak clear lah. Boleh repeat?'"""
+        system_instruction="Your name is Abu. You are a local expert in Malaysia. Answer questions directly and helpfully in Manglish."
     )
 else:
     st.error("Missing API Key!")
@@ -39,26 +38,26 @@ def speak_text(text):
         pass
 
 # --- 2. UI ---
-st.title("🤖 Abu: The Manglish Assistant")
-st.info("Cakap 'Abu' then your request. Example: 'Abu, tolong cari tempat makan kat Tanjung Malim.'")
+st.title("🤖 Abu Assistant")
+st.info("Say 'Abu' clearly, then ask your question. Example: 'Abu, suggest lunch spots nearby.'")
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# --- 3. THE MIC (Optimized for Noisy Environments) ---
+# --- 3. THE MIC (Optimized Settings) ---
 audio_bytes = audio_recorder(
-    text="Click & speak (Say 'Abu...')",
+    text="Click, say 'Abu...', then ask",
     recording_color="#e84a5f",
     neutral_color="#6aa36f",
     icon_size="3x",
-    energy_threshold=0.02, # Increased to ignore more background hum
-    pause_threshold=2.5    # Give you more time to breathe between words
+    energy_threshold=0.01, # Lower threshold to catch softer voices
+    pause_threshold=3.0    # Give you 3 seconds to finish your sentence
 )
 
-# --- 4. THE BRAIN ---
+# --- 4. PROCESSING ---
 if audio_bytes:
-    with st.spinner("Abu is processing..."):
+    with st.spinner("Abu is thinking..."):
         try:
             audio_io = io.BytesIO(audio_bytes)
             sound = AudioSegment.from_file(audio_io)
@@ -69,41 +68,32 @@ if audio_bytes:
             r = sr.Recognizer()
             with sr.AudioFile(wav_buffer) as source:
                 audio_data = r.record(source)
-                
-                # IMPROVED: Adding a 'prompt' tells Whisper what words to expect
-                user_text = r.recognize_whisper(
-                    audio_data, 
-                    model="tiny", 
-                    language="ms",
-                    initial_prompt="Abu, tolong cari, tempat makan, sedap, kat, Tanjung Malim, Manglish"
-                )
+                # FIX: We use 'base' model for better accuracy if 'tiny' is confusing
+                user_text = r.recognize_whisper(audio_data, model="base", language="ms")
             
             st.write(f"🔍 Abu heard: *{user_text}*")
 
-            # Fuzzy name check to prevent "Toulon" vs "Abu" confusion
-            wake_words = ["abu", "abo", "aboo", "ah bu", "toulon", "arbu"]
-            found_wake_word = any(word in user_text.lower() for word in wake_words)
-
-            if found_wake_word:
-                # Clean the prompt
-                clean_prompt = user_text.lower()
-                for word in wake_words:
-                    clean_prompt = clean_prompt.replace(word, "")
+            # Check if Abu was called
+            if "abu" in user_text.lower() or "abo" in user_text.lower():
+                # Get the actual question
+                prompt = user_text.lower().replace("abu", "").replace("abo", "").strip()
                 
-                # If it misheard 'Tolong cari' as 'Toulon Shari', we pass the whole thing
-                final_input = user_text if len(clean_prompt) < 2 else clean_prompt
-                
-                response = model.generate_content(final_input)
-                ai_response = response.text
-                
-                st.session_state.messages.append({"role": "user", "content": user_text})
-                st.session_state.messages.append({"role": "assistant", "content": ai_response})
-                st.rerun()
+                # If there's a question, send to Gemini
+                if len(prompt) > 2:
+                    response = model.generate_content(prompt)
+                    ai_response = response.text
+                    
+                    st.session_state.messages.append({"role": "user", "content": user_text})
+                    st.session_state.messages.append({"role": "assistant", "content": ai_response})
+                    st.rerun()
+                else:
+                    st.warning("I heard my name, but what is your question, boss?")
             else:
-                st.toast("I heard you, but say 'Abu' first lah!")
+                st.toast("Please start with 'Abu' so I know you are talking to me!")
 
         except Exception as e:
-            st.error("Ayo, something went wrong. Try again?")
+            st.error(f"Ayo, something went wrong: {e}")
 
+# Autoplay
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
     speak_text(st.session_state.messages[-1]["content"])
